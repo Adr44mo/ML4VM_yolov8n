@@ -2,7 +2,6 @@
 COCO/images/val2017/
 COCO/labels/val2017/
 COCO/annotations/
-ovad/ovad2000.json
 
 # Model weights
 *.pt
