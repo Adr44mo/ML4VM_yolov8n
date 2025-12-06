@@ -1,2 +1,43 @@
+# Dataset files (too large for git)
 COCO/images/val2017/
 COCO/labels/val2017/
+COCO/annotations/
+ovad/ovad2000.json
+
+# Model weights
+*.pt
+*.pth
+checkpoints/
+runs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Training outputs
+*.log
+*.zip
+wandb/
+
