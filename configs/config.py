@@ -56,9 +56,9 @@ class ModelConfig:
     # Number of classes (COCO)
     NUM_CLASSES = 80
     
-    # Number of pose classes (OVAD)
-    NUM_POSES = 3
-    POSE_CLASSES = ['lying', 'sitting', 'standing']
+    # Number of pose classes (4: lying, sitting, standing, other)
+    NUM_POSES = 4
+    POSE_CLASSES = ['lying', 'sitting', 'standing', 'other']
     
     # Input image size
     INPUT_SIZE = 640

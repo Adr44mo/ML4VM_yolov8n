@@ -15,7 +15,7 @@ class ComputeLossWithPose:
     Returns 4 losses: box_loss, cls_loss, dfl_loss, pose_loss
     """
     
-    def __init__(self, model, params, num_poses=3):
+    def __init__(self, model, params, num_poses=4):
         if hasattr(model, 'module'):
             model = model.module
 
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     class SimpleModel(nn.Module):
         def __init__(self):
             super().__init__()
-            self.head = HeadWithPose(version='n', num_classes=80, num_poses=3)
+            self.head = HeadWithPose(version='n', num_classes=80, num_poses=4)
             self.head.stride = torch.tensor([8.0, 16.0, 32.0])
         
         def forward(self, x):
@@ -228,7 +228,7 @@ if __name__ == '__main__':
         'pose': 1.0
     }
     
-    criterion = ComputeLossWithPose(model, params, num_poses=3)
+    criterion = ComputeLossWithPose(model, params, num_poses=4)
     
     # Create dummy outputs (training mode)
     model.head.train()

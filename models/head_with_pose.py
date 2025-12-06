@@ -60,7 +60,7 @@ class HeadWithPose(nn.Module):
         - Pose class scores (3 classes: lying, sitting, standing)
     """
     
-    def __init__(self, version, ch=16, num_classes=80, num_poses=3):
+    def __init__(self, version, ch=16, num_classes=80, num_poses=4):
         super().__init__()
         self.ch = ch
         self.coordinates = self.ch * 4
@@ -196,7 +196,7 @@ class HeadWithPose(nn.Module):
 if __name__ == '__main__':
     print("Testing HeadWithPose...")
     
-    head = HeadWithPose(version='n', num_classes=80, num_poses=3)
+    head = HeadWithPose(version='n', num_classes=80, num_poses=4)
     print(f"Parameters: {sum(p.numel() for p in head.parameters())/1e6:.3f}M")
     
     # Create dummy neck outputs

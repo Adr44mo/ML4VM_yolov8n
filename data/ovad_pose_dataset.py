@@ -12,10 +12,42 @@ from pathlib import Path
 from torch.utils.data import Dataset as TorchDataset
 
 
+# COCO category IDs are not contiguous, so we need a mapping to 0-79
+COCO_CATEGORY_TO_IDX = {
+    1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9,
+    11: 10, 13: 11, 14: 12, 15: 13, 16: 14, 17: 15, 18: 16, 19: 17, 20: 18, 21: 19,
+    22: 20, 23: 21, 24: 22, 25: 23, 27: 24, 28: 25, 31: 26, 32: 27, 33: 28, 34: 29,
+    35: 30, 36: 31, 37: 32, 38: 33, 39: 34, 40: 35, 41: 36, 42: 37, 43: 38, 44: 39,
+    46: 40, 47: 41, 48: 42, 49: 43, 50: 44, 51: 45, 52: 46, 53: 47, 54: 48, 55: 49,
+    56: 50, 57: 51, 58: 52, 59: 53, 60: 54, 61: 55, 62: 56, 63: 57, 64: 58, 65: 59,
+    67: 60, 70: 61, 72: 62, 73: 63, 74: 64, 75: 65, 76: 66, 77: 67, 78: 68, 79: 69,
+    80: 70, 81: 71, 82: 72, 84: 73, 85: 74, 86: 75, 87: 76, 88: 77, 89: 78, 90: 79
+}
+
+# Reverse mapping for decoding
+IDX_TO_COCO_CATEGORY = {v: k for k, v in COCO_CATEGORY_TO_IDX.items()}
+
+# COCO class names in order (0-79)
+COCO_CLASS_NAMES = [
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+    'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+    'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 
+    'tennis racket', 'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
+    'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+    'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 
+    'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase', 
+    'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
+
+
 class OVADPoseDataset(TorchDataset):
     """
-    OVAD dataset loader focusing on person detection with pose attributes
-    Pose classes: lying (0), sitting (1), standing (2)
+    OVAD dataset loader for all COCO classes with pose attributes
+    - Detects all 80 COCO object classes
+    - Pose classes (4): lying (0), sitting (1), standing (2), other (3)
+    - All objects get pose labels based on OVAD attributes if available
+    - Objects without pose attributes get "other" (3)
     
     This version uses OVAD annotations directly without requiring COCO annotation files.
     """
@@ -34,8 +66,8 @@ class OVADPoseDataset(TorchDataset):
         self.transform = transform
         self.images_dir = Path(images_dir)
         
-        # Pose configuration
-        self.pose_classes = ['lying', 'sitting', 'standing']
+        # Pose configuration (4 classes: lying, sitting, standing, other)
+        self.pose_classes = ['lying', 'sitting', 'standing', 'other']
         self.pose_attr_ids = {
             'lying': 94,      # position:horizontal/lying
             'sitting': 95,    # position:sitting/sit
@@ -53,38 +85,40 @@ class OVADPoseDataset(TorchDataset):
         # Filter and process annotations
         self._process_annotations()
         
-        print(f"✓ Loaded {len(self.image_ids)} images with {len(self.annotations)} person annotations")
+        print(f"✓ Loaded {len(self.image_ids)} images with {len(self.annotations)} annotations")
         
-        # Print pose distribution
-        pose_counts = [0, 0, 0]
+        # Print statistics
+        category_counts = {}
+        pose_counts = [0, 0, 0, 0]  # lying, sitting, standing, other
         for ann in self.annotations:
-            pose_counts[ann['pose_label']] += 1
-        print(f"  Pose distribution: lying={pose_counts[0]}, sitting={pose_counts[1]}, standing={pose_counts[2]}")
+            cat_id = ann['category_id']
+            category_counts[cat_id] = category_counts.get(cat_id, 0) + 1
+            if 'pose_label' in ann:
+                pose_counts[ann['pose_label']] += 1
+        print(f"  Categories: {len(category_counts)} unique classes")
+        print(f"  Pose distribution: lying={pose_counts[0]}, sitting={pose_counts[1]}, standing={pose_counts[2]}, other={pose_counts[3]}")
     
     def _process_annotations(self):
-        """Process OVAD annotations to extract person instances with pose labels"""
+        """Process OVAD annotations to extract all objects with pose labels"""
         self.annotations = []
         
         for ann in self.ovad_data['annotations']:
-            # Only process 'person' category (id=1)
-            if ann['category_id'] != 1:
-                continue
-            
-            # Check if annotation has pose attributes
+            # Check if annotation has pose attributes (lying, sitting, standing)
             pose_vec = ann['att_vec'][94:97]  # Extract pose attributes
             
-            if not any(v == 1 for v in pose_vec):
-                continue  # Skip if no pose annotation
-            
-            # Determine pose label
-            if ann['att_vec'][94] == 1:
-                pose_label = 0  # lying
-            elif ann['att_vec'][95] == 1:
-                pose_label = 1  # sitting
-            elif ann['att_vec'][96] == 1:
-                pose_label = 2  # standing
+            if any(v == 1 for v in pose_vec):
+                # Determine pose label
+                if ann['att_vec'][94] == 1:
+                    pose_label = 0  # lying
+                elif ann['att_vec'][95] == 1:
+                    pose_label = 1  # sitting
+                elif ann['att_vec'][96] == 1:
+                    pose_label = 2  # standing
+                else:
+                    pose_label = 3  # other (shouldn't happen but safe default)
             else:
-                continue  # Should not happen, but skip if uncertain
+                # No specific pose annotation - use "other" class
+                pose_label = 3  # other
             
             # Add pose label to annotation
             ann['pose_label'] = pose_label
@@ -109,10 +143,10 @@ class OVADPoseDataset(TorchDataset):
         Returns:
             image (Tensor): (3, H, W) normalized image tensor
             targets (dict): Dictionary with keys:
-                - 'cls': class labels (Tensor) - all 0 for person
+                - 'cls': class labels (Tensor) - COCO class IDs (0-79)
                 - 'box': bounding boxes (Tensor) - normalized (x_center, y_center, w, h)
                 - 'idx': batch indices (Tensor)
-                - 'pose': pose labels (Tensor) - 0=lying, 1=sitting, 2=standing
+                - 'pose': pose labels (Tensor) - 0=lying, 1=sitting, 2=standing, 3=other
         """
         img_id = self.image_ids[index]
         img_info = self.imgs[img_id]
@@ -128,8 +162,9 @@ class OVADPoseDataset(TorchDataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         h, w = image.shape[:2]
         
-        # Extract boxes and pose labels
+        # Extract boxes, class labels, and pose labels
         boxes = []
+        class_labels = []
         pose_labels = []
         
         for ann in anns:
@@ -149,6 +184,8 @@ class OVADPoseDataset(TorchDataset):
             box_h_norm = np.clip(box_h_norm, 0, 1)
             
             boxes.append([x_center, y_center, box_w_norm, box_h_norm])
+            # COCO category_id is 1-indexed and non-contiguous, convert to 0-79 for model
+            class_labels.append(COCO_CATEGORY_TO_IDX[ann['category_id']])
             pose_labels.append(ann['pose_label'])
         
         # Resize image to input size
@@ -169,8 +206,8 @@ class OVADPoseDataset(TorchDataset):
         num_objects = len(boxes)
         targets = torch.zeros((num_objects, 6))  # [class, x_center, y_center, w, h, pose]
         
-        for i, (box, pose) in enumerate(zip(boxes, pose_labels)):
-            targets[i, 0] = 0  # class = 0 (person)
+        for i, (box, cls, pose) in enumerate(zip(boxes, class_labels, pose_labels)):
+            targets[i, 0] = cls  # class ID (0-79)
             targets[i, 1:5] = torch.tensor(box)
             targets[i, 5] = pose
         

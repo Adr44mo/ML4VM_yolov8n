@@ -1,6 +1,7 @@
 """
-YOLOv8 Pose Detection Training Script for VSCode
+YOLOv8 Multi-Class Object Detection with Pose Estimation Training Script for VSCode
 This is a Python script version of the training notebook, designed for VSCode interactive mode.
+Detects all 80 COCO object classes with pose estimation (lying/sitting/standing/other) for all objects.
 Run sections with Shift+Enter or use Python Interactive window.
 """
 
